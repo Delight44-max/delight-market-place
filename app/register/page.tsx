@@ -65,7 +65,7 @@ export default function RegisterSeller() {
 
             setIsSubmitted(true);
             toast.success("Registration successful!");
-        } catch (error: never) {
+        } catch (error: any) {
             toast.error(error.message || "An error occurred");
         } finally {
             setLoading(false);
