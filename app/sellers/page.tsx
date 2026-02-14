@@ -245,11 +245,11 @@ export default function Sellers() {
                         Connecting buyers with verified sellers across Nigeria
                     </p>
                     <div className="flex items-center justify-center gap-6 mb-6">
-                        <Link href="/register-seller" className="text-blue-600 hover:text-blue-700 font-semibold text-sm">Become a Seller</Link>
+                        <Link href="/register" className="text-blue-600 hover:text-blue-700 font-semibold text-sm">Become a Seller</Link>
                         <span className="text-gray-300">•</span>
                         <button onClick={() => window.open(SHIPPING_URL, '_blank')} className="text-blue-600 hover:text-blue-700 font-semibold text-sm">Ship Products</button>
                         <span className="text-gray-300">•</span>
-                        <Link href="/contact" className="text-blue-600 hover:text-blue-700 font-semibold text-sm">Contact Admin</Link>
+                        <Link href="https://wa.me/2349113351761" className="text-blue-600 hover:text-blue-700 font-semibold text-sm">Contact Admin</Link>
                     </div>
                     <p className="text-xs text-gray-400">
                         © 2026 Created by <span className="font-bold">Jandiebube Eboagoro Delight</span>
