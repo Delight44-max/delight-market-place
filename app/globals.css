@@ -1,26 +1,68 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+    --background: #ffffff;
+    --foreground: #171717;
+    --blue-start: #2563eb;  /* Blue 600 */
+    --blue-end: #7c3aed;    /* Purple 600 */
+    --green-light: #f0fdf4;
+    --green-dark: #16a34a;
+    --purple-light: #faf5ff;
+    --purple-dark: #9333ea;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+@theme {
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --color-primary-start: var(--blue-start);
+    --color-primary-end: var(--blue-end);
+    --color-accent-green-light: var(--green-light);
+    --color-accent-green-dark: var(--green-dark);
+    --color-accent-purple-light: var(--purple-light);
+    --color-accent-purple-dark: var(--purple-dark);
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+    :root {
+        --background: #0a0a0a;
+        --foreground: #ededed;
+        --blue-start: #3b82f6;  /* Lighter blue for dark mode */
+        --blue-end: #a855f7;    /* Lighter purple */
+        --green-light: #1a2e05;
+        --green-dark: #22c55e;
+        --purple-light: #2e1065;
+        --purple-dark: #c084fc;
+    }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+    background: var(--background);
+    color: var(--foreground);
+    font-family: Arial, Helvetica, sans-serif;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Custom animations for marketplace */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.fade-in-up {
+    animation: fadeInUp 0.6s ease-out;
+}
+
+/* Gradient backgrounds */
+.gradient-bg {
+    background: linear-gradient(135deg, var(--blue-start), var(--blue-end));
+}
+
+.hero-gradient {
+    background: linear-gradient(135deg, #dbeafe 0%, #ffffff 50%, #faf5ff 100%);
 }
