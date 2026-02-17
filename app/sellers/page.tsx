@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { supabase } from "../../lib/supabase";
+import { supabase } from "@/lib/supabase";
 
 interface Seller {
     id: string;
@@ -14,6 +14,7 @@ interface Seller {
     country: string;
     state: string;
     profile_pic_url?: string;
+    is_paid?: boolean;
 }
 
 export default function Sellers() {
@@ -32,13 +33,24 @@ export default function Sellers() {
             const { data, error } = await supabase
                 .from("sellers")
                 .select("*")
-                .neq('status', 'free')
+                .eq('is_active', true)
+                .eq('is_approved', true)
                 .order('status', { ascending: false });
 
             if (!error && data) {
+                // Sort by: 1) Paid status (paid first), 2) Plan tier (elite/pro/premium/free), 3) Brand name
                 const sortedData = data.sort((a, b) => {
-                    const statusOrder: Record<string, number> = { elite: 1, pro: 2, premium: 3 };
-                    return (statusOrder[a.status?.toLowerCase()] || 99) - (statusOrder[b.status?.toLowerCase()] || 99);
+                    // First priority: Paid sellers come first
+                    if (a.is_paid && !b.is_paid) return -1;
+                    if (!a.is_paid && b.is_paid) return 1;
+
+                    // Second priority: Status tier (elite > pro > premium > free)
+                    const statusOrder: Record<string, number> = { elite: 1, pro: 2, premium: 3, free: 4 };
+                    const statusDiff = (statusOrder[a.status?.toLowerCase()] || 99) - (statusOrder[b.status?.toLowerCase()] || 99);
+                    if (statusDiff !== 0) return statusDiff;
+
+                    // Third priority: Alphabetical by brand name
+                    return a.brand_name.localeCompare(b.brand_name);
                 });
                 setSellers(sortedData);
                 setFilteredSellers(sortedData);
@@ -245,11 +257,11 @@ export default function Sellers() {
                         Connecting buyers with verified sellers across Nigeria
                     </p>
                     <div className="flex items-center justify-center gap-6 mb-6">
-                        <Link href="/register" className="text-blue-600 hover:text-blue-700 font-semibold text-sm">Become a Seller</Link>
+                        <Link href="/register-seller" className="text-blue-600 hover:text-blue-700 font-semibold text-sm">Become a Seller</Link>
                         <span className="text-gray-300">•</span>
                         <button onClick={() => window.open(SHIPPING_URL, '_blank')} className="text-blue-600 hover:text-blue-700 font-semibold text-sm">Ship Products</button>
                         <span className="text-gray-300">•</span>
-                        <Link href="https://wa.me/2349113351761" className="text-blue-600 hover:text-blue-700 font-semibold text-sm">Contact Admin</Link>
+                        <Link href="/contact" className="text-blue-600 hover:text-blue-700 font-semibold text-sm">Contact Admin</Link>
                     </div>
                     <p className="text-xs text-gray-400">
                         © 2026 Created by <span className="font-bold">Jandiebube Eboagoro Delight</span>

@@ -21,7 +21,7 @@ export default function Home() {
                             Join as Seller
                         </Link>
                         <Link href="/admin" className="w-full sm:w-auto text-gray-400 hover:text-blue-600 px-4 py-2 rounded-lg font-medium text-sm transition-colors">
-                            Admin Login
+
                         </Link>
                     </div>
                 </div>

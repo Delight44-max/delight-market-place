@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { supabase } from "../../lib/supabase";
+import { createClient } from '@supabase/supabase-js';
 import { toast } from "react-hot-toast";
 
 interface Seller {
@@ -15,14 +15,29 @@ interface Seller {
     whatsapp: string;
 }
 
+// Admin client with service role (bypasses RLS)
+const getAdminClient = () => {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const supabaseServiceKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+    return createClient(supabaseUrl, supabaseServiceKey, {
+        auth: {
+            autoRefreshToken: false,
+            persistSession: false
+        }
+    });
+};
+
 export default function Admin() {
     const [password, setPassword] = useState("");
     const [authenticated, setAuthenticated] = useState(false);
     const [sellers, setSellers] = useState<Seller[]>([]);
     const [loading, setLoading] = useState(false);
 
+    const ADMIN_PASSWORD = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || "admin123";
+
     const checkAuth = () => {
-        if (password === process.env.NEXT_PUBLIC_ADMIN_PASSWORD) {
+        if (password === ADMIN_PASSWORD) {
             setAuthenticated(true);
             fetchSellers();
         } else {
@@ -32,12 +47,15 @@ export default function Admin() {
 
     const fetchSellers = async () => {
         setLoading(true);
-        const { data, error } = await supabase
+        const adminClient = getAdminClient();
+
+        const { data, error } = await adminClient
             .from("sellers")
             .select("*")
             .order('brand_name', { ascending: true });
 
         if (error) {
+            console.error("Fetch error:", error);
             toast.error("Failed to fetch sellers");
         } else {
             setSellers(data || []);
@@ -46,14 +64,21 @@ export default function Admin() {
     };
 
     const updateSeller = async (id: string, updates: Partial<Seller>) => {
-        const { error } = await supabase
+        console.log("Updating seller:", id, "with:", updates);
+
+        const adminClient = getAdminClient();
+
+        const { data, error } = await adminClient
             .from("sellers")
             .update(updates)
-            .eq("id", id);
+            .eq("id", id)
+            .select();
 
         if (error) {
-            toast.error("Failed to update seller");
+            console.error("Update error:", error);
+            toast.error(`Failed to update: ${error.message}`);
         } else {
+            console.log("Update successful:", data);
             toast.success("Seller updated successfully");
             fetchSellers();
         }
@@ -74,6 +99,7 @@ export default function Admin() {
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
         return diffDays <= 14 && diffDays > 0;
     };
+
     if (!authenticated) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-100">
@@ -84,6 +110,7 @@ export default function Admin() {
                         placeholder="Enter Admin Password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
+                        onKeyPress={(e) => e.key === 'Enter' && checkAuth()}
                         className="w-full p-4 border border-gray-300 rounded-xl mb-4 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                     />
                     <button
@@ -103,8 +130,12 @@ export default function Admin() {
                 <div className="flex flex-col md:flex-row justify-between items-center mb-10 gap-4">
                     <h1 className="text-4xl font-extrabold text-gray-900">Admin Control Panel</h1>
                     <div className="flex gap-4">
-                        <button onClick={fetchSellers} className="bg-gray-200 hover:bg-gray-300 px-4 py-2 rounded-lg font-semibold">Refresh</button>
-                        <button onClick={() => setAuthenticated(false)} className="bg-red-50 text-red-600 hover:bg-red-100 px-4 py-2 rounded-lg font-semibold border border-red-200">Logout</button>
+                        <button onClick={fetchSellers} className="bg-gray-200 hover:bg-gray-300 px-4 py-2 rounded-lg font-semibold">
+                            Refresh
+                        </button>
+                        <button onClick={() => setAuthenticated(false)} className="bg-red-50 text-red-600 hover:bg-red-100 px-4 py-2 rounded-lg font-semibold border border-red-200">
+                            Logout
+                        </button>
                     </div>
                 </div>
 
@@ -125,10 +156,18 @@ export default function Admin() {
                                     <td className="p-5">
                                         <div className="flex items-center gap-4">
                                             <div className="flex-shrink-0">
-                                                {['premium', 'pro', 'elite'].includes(s.status) ? (
-                                                    <img src={`/${s.status}.jpg`} alt={s.status} className="w-12 h-12 rounded-full border-2 border-white shadow-md" />
+                                                {['premium', 'pro', 'elite'].includes(s.status?.toLowerCase()) ? (
+                                                    <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white text-xs font-bold ${
+                                                        s.status?.toLowerCase() === 'elite' ? 'bg-gradient-to-r from-red-600 to-pink-600' :
+                                                            s.status?.toLowerCase() === 'pro' ? 'bg-gradient-to-r from-purple-600 to-indigo-600' :
+                                                                'bg-gradient-to-r from-amber-400 to-yellow-500'
+                                                    }`}>
+                                                        {s.status?.substring(0, 1).toUpperCase()}
+                                                    </div>
                                                 ) : (
-                                                    <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center text-gray-400 text-xs font-bold">FREE</div>
+                                                    <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center text-gray-400 text-xs font-bold">
+                                                        FREE
+                                                    </div>
                                                 )}
                                             </div>
                                             <div>
@@ -140,7 +179,7 @@ export default function Admin() {
                                     <td className="p-5">
                                         <div className="space-y-3">
                                             <select
-                                                value={s.status}
+                                                value={s.status || 'free'}
                                                 onChange={(e) => updateSeller(s.id, { status: e.target.value })}
                                                 className="w-full p-2 bg-white border border-gray-300 rounded-lg text-sm font-medium"
                                             >
@@ -153,7 +192,7 @@ export default function Admin() {
                                                 <label className="text-[10px] font-bold text-gray-400 uppercase">Expiration Date</label>
                                                 <input
                                                     type="date"
-                                                    value={s.premium_expiry || ""}
+                                                    value={s.premium_expiry ? s.premium_expiry.split('T')[0] : ""}
                                                     onChange={(e) => updateSeller(s.id, { premium_expiry: e.target.value })}
                                                     className="w-full p-2 border border-gray-300 rounded-lg text-sm"
                                                 />
@@ -171,31 +210,68 @@ export default function Admin() {
                                     <td className="p-5">
                                         <div className="flex flex-col gap-3">
                                             <label className="flex items-center gap-3 cursor-pointer group">
-                                                <input type="checkbox" className="w-5 h-5 rounded text-blue-600 border-gray-300" checked={s.is_approved} onChange={(e) => updateSeller(s.id, { is_approved: e.target.checked })} />
-                                                <span className={`text-sm font-semibold ${s.is_approved ? 'text-green-600' : 'text-gray-500'}`}>Approved</span>
+                                                <input
+                                                    type="checkbox"
+                                                    className="w-5 h-5 rounded text-blue-600 border-gray-300 focus:ring-blue-500"
+                                                    checked={s.is_approved || false}
+                                                    onChange={(e) => {
+                                                        console.log("Approved checkbox clicked:", e.target.checked);
+                                                        updateSeller(s.id, { is_approved: e.target.checked });
+                                                    }}
+                                                />
+                                                <span className={`text-sm font-semibold ${s.is_approved ? 'text-green-600' : 'text-gray-500'}`}>
+                                                        Approved
+                                                    </span>
                                             </label>
                                             <label className="flex items-center gap-3 cursor-pointer">
-                                                <input type="checkbox" className="w-5 h-5 rounded text-blue-600 border-gray-300" checked={s.is_paid} onChange={(e) => updateSeller(s.id, { is_paid: e.target.checked })} />
-                                                <span className={`text-sm font-semibold ${s.is_paid ? 'text-blue-600' : 'text-gray-500'}`}>Mark as Paid</span>
+                                                <input
+                                                    type="checkbox"
+                                                    className="w-5 h-5 rounded text-blue-600 border-gray-300 focus:ring-blue-500"
+                                                    checked={s.is_paid || false}
+                                                    onChange={(e) => {
+                                                        console.log("Paid checkbox clicked:", e.target.checked);
+                                                        updateSeller(s.id, { is_paid: e.target.checked });
+                                                    }}
+                                                />
+                                                <span className={`text-sm font-semibold ${s.is_paid ? 'text-blue-600' : 'text-gray-500'}`}>
+                                                        Mark as Paid
+                                                    </span>
                                             </label>
                                         </div>
                                     </td>
                                     <td className="p-5">
                                         <div className="flex flex-col gap-3">
                                             <label className="flex items-center gap-3 cursor-pointer">
-                                                <input type="checkbox" className="w-5 h-5 rounded text-blue-600 border-gray-300" checked={s.is_active} onChange={(e) => updateSeller(s.id, { is_active: e.target.checked })} />
-                                                <span className={`text-sm font-semibold ${s.is_active ? 'text-green-600' : 'text-red-600'}`}>
-                                                        {s.is_active ? 'Visible (Active)' : 'Hidden (Deactivated)'}
+                                                <input
+                                                    type="checkbox"
+                                                    className="w-5 h-5 rounded text-blue-600 border-gray-300 focus:ring-blue-500"
+                                                    checked={s.is_active !== false}
+                                                    onChange={(e) => {
+                                                        console.log("Active checkbox clicked:", e.target.checked);
+                                                        updateSeller(s.id, { is_active: e.target.checked });
+                                                    }}
+                                                />
+                                                <span className={`text-sm font-semibold ${s.is_active !== false ? 'text-green-600' : 'text-red-600'}`}>
+                                                        {s.is_active !== false ? 'Visible (Active)' : 'Hidden (Deactivated)'}
                                                     </span>
                                             </label>
                                             <button
-                                                onClick={() => updateSeller(s.id, { is_featured: !s.is_featured })}
-                                                className={`w-full py-2 rounded-lg text-xs font-bold transition-all ${s.is_featured ? 'bg-yellow-400 text-yellow-900 border border-yellow-500' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                                                onClick={() => {
+                                                    console.log("Feature button clicked, current:", s.is_featured);
+                                                    updateSeller(s.id, { is_featured: !s.is_featured });
+                                                }}
+                                                className={`w-full py-2 rounded-lg text-xs font-bold transition-all ${
+                                                    s.is_featured ? 'bg-yellow-400 text-yellow-900 border border-yellow-500' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                                }`}
                                             >
                                                 {s.is_featured ? '★ Featured on Home' : 'Feature on Home'}
                                             </button>
                                             <button
-                                                onClick={() => { if(confirm(`Remove/Deactivate ${s.brand_name}?`)) updateSeller(s.id, { is_active: false, is_approved: false }) }}
+                                                onClick={() => {
+                                                    if (confirm(`Remove/Deactivate ${s.brand_name}?`)) {
+                                                        updateSeller(s.id, { is_active: false, is_approved: false });
+                                                    }
+                                                }}
                                                 className="w-full py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg text-xs font-bold border border-red-100"
                                             >
                                                 Quick Deactivate
