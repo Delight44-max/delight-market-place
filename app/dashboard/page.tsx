@@ -161,17 +161,15 @@ export default function Dashboard() {
         setLoading(true);
 
         try {
-            // Safely convert price to number
+            // Extract price once to help TypeScript narrow properly
+            const currentPrice = editProduct.price;
+
             let finalPrice: number = 0;
 
-            if (typeof editProduct.price === 'string') {
-                const trimmed = editProduct.price.trim();
-                finalPrice = trimmed === '' ? 0 : Number(trimmed);
-            } else {
-                finalPrice = editProduct.price; // already a number
-            }
+            // Explicit type guard + safe trim
+            finalPrice = currentPrice;
 
-            // Prevent NaN (e.g. if user types letters)
+            // Safety: handle invalid input (NaN)
             if (isNaN(finalPrice)) {
                 finalPrice = 0;
             }
@@ -197,7 +195,6 @@ export default function Dashboard() {
             setLoading(false);
         }
     };
-
     const handleDeleteProduct = async (id: string) => {
         const confirmProductDelete = () => new Promise<boolean>((resolve) => {
             toast((t) => (
