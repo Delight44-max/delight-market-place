@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { uploadToCloudinary } from "@/lib/cloudinary";
 import { toast } from "react-hot-toast";
 import { deleteMyAuthAccount } from "@/lib/selfProfileDeleteAction";
+import type { User } from "@supabase/supabase-js";
 
 interface Product {
     id: string;
@@ -12,6 +13,15 @@ interface Product {
     video_url?: string;
     description: string;
     price: number;
+    currency: string;
+}
+
+interface EditableProduct {
+    id: string;
+    image_url: string;
+    video_url?: string;
+    description: string;
+    price: number | string;
     currency: string;
 }
 
@@ -25,12 +35,36 @@ interface Seller {
     category?: string;
 }
 
+const PLANS = [
+    {
+        name: 'Premium',
+        price: 5000,
+        features: ['Visible to customers', 'Priority listing', 'Premium badge', 'Image uploads'],
+        color: 'from-amber-400 to-yellow-500',
+        icon: '⭐'
+    },
+    {
+        name: 'Pro',
+        price: 12500,
+        features: ['All Premium features', 'Higher ranking', 'Pro badge'],
+        color: 'from-purple-600 to-indigo-600',
+        icon: '💎'
+    },
+    {
+        name: 'Elite',
+        price: 25000,
+        features: ['All Pro features', 'Homepage featured', 'Verified badge', 'Top placement'],
+        color: 'from-red-600 to-pink-600',
+        icon: '👑'
+    }
+];
+
 export default function Dashboard() {
-    const [user, setUser] = useState<any>(null);
+    const [user, setUser] = useState<User | null>(null);
     const [seller, setSeller] = useState<Seller | null>(null);
     const [products, setProducts] = useState<Product[]>([]);
     const [form, setForm] = useState({ image: null as File | null, description: "", price: "", currency: "NGN" });
-    const [editProduct, setEditProduct] = useState<(Product & { price: number | string }) | null>(null);
+    const [editProduct, setEditProduct] = useState<EditableProduct | null>(null);
     const [profileForm, setProfileForm] = useState({ bio: "" });
     const [loading, setLoading] = useState(false);
     const [initialFetchDone, setInitialFetchDone] = useState(false);
@@ -40,30 +74,6 @@ export default function Dashboard() {
 
     const SHIPPING_URL = process.env.NEXT_PUBLIC_SHIPPING_URL || "https://giglogistics.com";
     const ADMIN_WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_ADMIN_WHATSAPP || "2348000000000";
-
-    const plans = [
-        {
-            name: 'Premium',
-            price: 5000,
-            features: ['Visible to customers', 'Priority listing', 'Premium badge', 'Image uploads'],
-            color: 'from-amber-400 to-yellow-500',
-            icon: '⭐'
-        },
-        {
-            name: 'Pro',
-            price: 12500,
-            features: ['All Premium features', 'Higher ranking', 'Pro badge'],
-            color: 'from-purple-600 to-indigo-600',
-            icon: '💎'
-        },
-        {
-            name: 'Elite',
-            price: 25000,
-            features: ['All Pro features', 'Homepage featured', 'Verified badge', 'Top placement'],
-            color: 'from-red-600 to-pink-600',
-            icon: '👑'
-        }
-    ];
 
     useEffect(() => {
         const checkAuthAndFetch = async () => {
@@ -103,8 +113,9 @@ export default function Dashboard() {
             } else {
                 setSeller(null);
             }
-        } catch (error: any) {
-            console.error("Seller Fetch Error:", error.message);
+        } catch (error: unknown) {
+            const msg = error instanceof Error ? error.message : "Unknown error";
+            console.error("Seller Fetch Error:", msg);
             toast.error("Could not load profile.");
         }
     };
@@ -130,6 +141,7 @@ export default function Dashboard() {
     const handleUpload = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!form.image) return toast.error("Please select an image");
+        if (!user) return;
         setLoading(true);
         try {
             const imageUrl = await uploadToCloudinary(form.image, 'products');
@@ -147,9 +159,10 @@ export default function Dashboard() {
             toast.success("Product listed successfully!");
             setForm({ image: null, description: "", price: "", currency: "NGN" });
             setImagePreview(null);
-            fetchProducts(user.id);
-        } catch (error: any) {
-            toast.error(error.message || "Upload failed");
+            await fetchProducts(user.id);
+        } catch (error: unknown) {
+            const msg = error instanceof Error ? error.message : "Upload failed";
+            toast.error(msg);
         } finally {
             setLoading(false);
         }
@@ -157,28 +170,21 @@ export default function Dashboard() {
 
     const handleEditProduct = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!editProduct) return;
+        if (!editProduct || !user) return;
         setLoading(true);
 
         try {
-            // Extract price once to help TypeScript narrow properly
-            const currentPrice = editProduct.price;
-
+            const rawPrice = editProduct.price;
             let finalPrice: number = 0;
 
-
-            if (typeof currentPrice === 'string') {
-            //@ts-ignore
-                const trimmed = currentPrice.trim();
+            if (typeof rawPrice === 'string') {
+                const trimmed = rawPrice.trim();
                 finalPrice = trimmed === '' ? 0 : Number(trimmed);
             } else {
-                finalPrice = currentPrice;
+                finalPrice = rawPrice;
             }
 
-
-            if (isNaN(finalPrice)) {
-                finalPrice = 0;
-            }
+            if (isNaN(finalPrice)) finalPrice = 0;
 
             const { error } = await supabase
                 .from("products")
@@ -193,8 +199,8 @@ export default function Dashboard() {
 
             toast.success("Product updated!");
             setEditProduct(null);
-            fetchProducts(user.id);
-        } catch (error: any) {
+            await fetchProducts(user.id);
+        } catch (error: unknown) {
             toast.error("Update failed");
             console.error("Product update error:", error);
         } finally {
@@ -244,12 +250,13 @@ export default function Dashboard() {
             toast.error("Delete failed");
         } else {
             toast.success("Product removed");
-            fetchProducts(user.id);
+            if (user) await fetchProducts(user.id);
         }
     };
 
     const handleUpdateProfile = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!user) return;
         setLoading(true);
         const { error } = await supabase
             .from("sellers")
@@ -259,7 +266,7 @@ export default function Dashboard() {
         if (error) toast.error("Profile update failed");
         else {
             toast.success("Bio updated!");
-            fetchSeller(user.id);
+            await fetchSeller(user.id);
         }
         setLoading(false);
     };
@@ -276,9 +283,6 @@ export default function Dashboard() {
         toast.success("Opening WhatsApp... Please complete payment with admin.");
     };
 
-    // ────────────────────────────────────────────────
-    // Delete My Account (seller profile + auth user)
-    // ────────────────────────────────────────────────
     const handleDeleteAccount = async () => {
         const confirmDelete = () => new Promise<boolean>((resolve) => {
             toast((t) => (
@@ -292,7 +296,7 @@ export default function Dashboard() {
                     <ul className="text-sm text-gray-700 list-disc pl-6 space-y-1">
                         <li>Your seller profile</li>
                         <li>All your listed products</li>
-                        <li>Your login account (you won't be able to log in again)</li>
+                        <li>Your login account (you won&#39;t be able to log in again)</li>
                     </ul>
                     <p className="text-xs text-red-600 font-medium text-center">
                         This action is IRREVERSIBLE — no recovery possible!
@@ -325,15 +329,13 @@ export default function Dashboard() {
         toast.loading("Deleting your account permanently... This may take a moment");
 
         try {
-            // Step 1: Delete seller profile
             const { error: sellerError } = await supabase
                 .from("sellers")
                 .delete()
-                .eq("id", user.id);
+                .eq("id", user!.id);
 
             if (sellerError) throw sellerError;
 
-            // Step 2: Delete auth user using Server Action
             const authResult = await deleteMyAuthAccount();
 
             if (!authResult.success) {
@@ -345,9 +347,10 @@ export default function Dashboard() {
 
             await supabase.auth.signOut();
             router.replace("/login");
-        } catch (err: any) {
+        } catch (err: unknown) {
             toast.dismiss();
-            toast.error(`Deletion failed: ${err.message}`);
+            const msg = err instanceof Error ? err.message : "Deletion failed";
+            toast.error(`Deletion failed: ${msg}`);
             console.error("Account delete error:", err);
         }
     };
@@ -408,7 +411,7 @@ export default function Dashboard() {
                         <svg className="w-10 h-10 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
                     </div>
                     <h2 className="text-2xl font-bold text-gray-900 mb-3">Profile Incomplete</h2>
-                    <p className="text-gray-600 mb-8">We couldn't find your seller profile. Please try logging in again.</p>
+                    <p className="text-gray-600 mb-8">We couldn&apos;t find your seller profile. Please try logging in again.</p>
                     <button onClick={handleLogout} className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-4 rounded-2xl font-bold hover:shadow-lg transition-all">
                         Return to Login
                     </button>
@@ -560,7 +563,7 @@ export default function Dashboard() {
                                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>
                                 <h3 className="font-bold text-lg">Need Shipping?</h3>
                             </div>
-                            <p className="text-green-100 text-sm mb-4">Fast & reliable delivery for your products across Nigeria.</p>
+                            <p className="text-green-100 text-sm mb-4">Fast &amp; reliable delivery for your products across Nigeria.</p>
                             <button
                                 onClick={() => window.open(SHIPPING_URL, '_blank')}
                                 className="w-full bg-white text-green-600 py-3 rounded-xl font-bold hover:bg-green-50 transition-all"
@@ -629,10 +632,7 @@ export default function Dashboard() {
                                         <input
                                             type="number"
                                             value={form.price}
-                                            onChange={(e) => setForm({
-                                                ...form,
-                                                price: e.target.value
-                                            })}
+                                            onChange={(e) => setForm({ ...form, price: e.target.value })}
                                             className="w-full border-2 border-gray-200 rounded-xl p-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
                                             placeholder="0.00"
                                             step="0.01"
@@ -755,7 +755,7 @@ export default function Dashboard() {
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            {plans.map((plan) => (
+                            {PLANS.map((plan) => (
                                 <div
                                     key={plan.name}
                                     className={`relative rounded-2xl p-6 border-2 ${
@@ -818,7 +818,7 @@ export default function Dashboard() {
                                 <div>
                                     <h5 className="font-bold text-blue-900 mb-1">How Payment Works</h5>
                                     <p className="text-sm text-blue-800">
-                                        After selecting a plan, you'll be redirected to WhatsApp to contact our admin.
+                                        After selecting a plan, you&apos;ll be redirected to WhatsApp to contact our admin.
                                         Complete payment and your account will be upgraded within 24 hours.
                                     </p>
                                 </div>
@@ -848,7 +848,7 @@ export default function Dashboard() {
                                 <textarea
                                     className="w-full border-2 border-gray-200 rounded-xl p-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none"
                                     value={editProduct.description}
-                                    onChange={(e) => setEditProduct(prev => ({ ...prev, description: e.target.value }))}
+                                    onChange={(e) => setEditProduct(prev => prev ? { ...prev, description: e.target.value } : null)}
                                     rows={3}
                                 />
                             </div>
@@ -862,11 +862,10 @@ export default function Dashboard() {
                                         value={editProduct.price ?? ""}
                                         onChange={(e) => {
                                             const inputValue = e.target.value;
-                                       // @ts-ignore
-                                            setEditProduct(prev => ({
+                                            setEditProduct(prev => prev ? {
                                                 ...prev,
                                                 price: inputValue === "" ? "" : Number(inputValue)
-                                            }));
+                                            } : null);
                                         }}
                                         step="0.01"
                                     />
@@ -876,7 +875,7 @@ export default function Dashboard() {
                                     <select
                                         className="w-full border-2 border-gray-200 rounded-xl p-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none font-semibold"
                                         value={editProduct.currency}
-                                        onChange={(e) => setEditProduct(prev => ({ ...prev, currency: e.target.value }))}
+                                        onChange={(e) => setEditProduct(prev => prev ? { ...prev, currency: e.target.value } : null)}
                                     >
                                         <option value="NGN">₦ NGN</option>
                                         <option value="USD">$ USD</option>
