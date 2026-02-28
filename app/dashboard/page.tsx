@@ -30,7 +30,7 @@ export default function Dashboard() {
     const [seller, setSeller] = useState<Seller | null>(null);
     const [products, setProducts] = useState<Product[]>([]);
     const [form, setForm] = useState({ image: null as File | null, description: "", price: "", currency: "NGN" });
-    const [editProduct, setEditProduct] = useState<Product | null>(null);
+    const [editProduct, setEditProduct] = useState<(Product & { price: number | string }) | null>(null);
     const [profileForm, setProfileForm] = useState({ bio: "" });
     const [loading, setLoading] = useState(false);
     const [initialFetchDone, setInitialFetchDone] = useState(false);
@@ -159,11 +159,28 @@ export default function Dashboard() {
         e.preventDefault();
         if (!editProduct) return;
         setLoading(true);
+
         try {
-            const { error } = await supabase.from("products")
+            // Safely convert price to number
+            let finalPrice: number = 0;
+
+            if (typeof editProduct.price === 'string') {
+                const trimmed = editProduct.price.trim();
+                finalPrice = trimmed === '' ? 0 : Number(trimmed);
+            } else {
+                finalPrice = editProduct.price; // already a number
+            }
+
+            // Prevent NaN (e.g. if user types letters)
+            if (isNaN(finalPrice)) {
+                finalPrice = 0;
+            }
+
+            const { error } = await supabase
+                .from("products")
                 .update({
                     description: editProduct.description,
-                    price: editProduct.price,
+                    price: finalPrice,
                     currency: editProduct.currency,
                 })
                 .eq("id", editProduct.id);
@@ -175,6 +192,7 @@ export default function Dashboard() {
             fetchProducts(user.id);
         } catch (error: any) {
             toast.error("Update failed");
+            console.error("Product update error:", error);
         } finally {
             setLoading(false);
         }
@@ -320,7 +338,6 @@ export default function Dashboard() {
 
             toast.dismiss();
             toast.success("Your account has been permanently deleted");
-
 
             await supabase.auth.signOut();
             router.replace("/login");
