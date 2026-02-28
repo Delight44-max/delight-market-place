@@ -167,7 +167,12 @@ export default function Dashboard() {
             let finalPrice: number = 0;
 
             // Explicit type guard + safe trim
-            finalPrice = currentPrice;
+            if (typeof currentPrice === 'string') {
+                const trimmed = currentPrice.trim();
+                finalPrice = trimmed === '' ? 0 : Number(trimmed);
+            } else {
+                finalPrice = currentPrice; // already a number
+            }
 
             // Safety: handle invalid input (NaN)
             if (isNaN(finalPrice)) {
@@ -195,6 +200,7 @@ export default function Dashboard() {
             setLoading(false);
         }
     };
+
     const handleDeleteProduct = async (id: string) => {
         const confirmProductDelete = () => new Promise<boolean>((resolve) => {
             toast((t) => (
@@ -825,11 +831,11 @@ export default function Dashboard() {
             {editProduct && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in">
                     <div className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl transform animate-in zoom-in">
-                        <div className="flex items-center justify-between mb-6">
+                        <div className="flex items-center justify-center mb-6">
                             <h3 className="text-2xl font-bold text-gray-900">Edit Product</h3>
                             <button
                                 onClick={() => setEditProduct(null)}
-                                className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-all"
+                                className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-all ml-auto"
                             >
                                 <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                             </button>
@@ -841,7 +847,7 @@ export default function Dashboard() {
                                 <textarea
                                     className="w-full border-2 border-gray-200 rounded-xl p-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none"
                                     value={editProduct.description}
-                                    onChange={(e) => setEditProduct({...editProduct, description: e.target.value})}
+                                    onChange={(e) => setEditProduct(prev => ({ ...prev, description: e.target.value }))}
                                     rows={3}
                                 />
                             </div>
@@ -853,10 +859,14 @@ export default function Dashboard() {
                                         type="number"
                                         className="w-full border-2 border-gray-200 rounded-xl p-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
                                         value={editProduct.price ?? ""}
-                                        onChange={(e) => setEditProduct({
-                                            ...editProduct,
-                                            price: e.target.value === "" ? "" : Number(e.target.value)
-                                        })}
+                                        onChange={(e) => {
+                                            const inputValue = e.target.value;
+                                            // @ts-expect-error
+                                            setEditProduct(prev => ({
+                                                ...prev,
+                                                price: inputValue === "" ? "" : Number(inputValue)
+                                            }));
+                                        }}
                                         step="0.01"
                                     />
                                 </div>
@@ -865,7 +875,7 @@ export default function Dashboard() {
                                     <select
                                         className="w-full border-2 border-gray-200 rounded-xl p-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none font-semibold"
                                         value={editProduct.currency}
-                                        onChange={(e) => setEditProduct({...editProduct, currency: e.target.value})}
+                                        onChange={(e) => setEditProduct(prev => ({ ...prev, currency: e.target.value }))}
                                     >
                                         <option value="NGN">₦ NGN</option>
                                         <option value="USD">$ USD</option>
