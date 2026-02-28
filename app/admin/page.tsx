@@ -146,8 +146,8 @@ export default function Admin() {
         toast.dismiss();
 
         if (result.success) {
-            toast.success(result.message);
-            fetchSellers(); // refresh list
+            toast.success(result.message ?? "Seller profile deleted successfully");
+            fetchSellers();
         } else {
             toast.error(`Failed to delete: ${result.error}`);
             console.error("Delete failed:", result.error);
