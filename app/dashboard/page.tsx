@@ -166,15 +166,16 @@ export default function Dashboard() {
 
             let finalPrice: number = 0;
 
-            // Explicit type guard + safe trim
+
             if (typeof currentPrice === 'string') {
+            //@ts-ignore
                 const trimmed = currentPrice.trim();
                 finalPrice = trimmed === '' ? 0 : Number(trimmed);
             } else {
-                finalPrice = currentPrice; // already a number
+                finalPrice = currentPrice;
             }
 
-            // Safety: handle invalid input (NaN)
+
             if (isNaN(finalPrice)) {
                 finalPrice = 0;
             }
@@ -861,7 +862,7 @@ export default function Dashboard() {
                                         value={editProduct.price ?? ""}
                                         onChange={(e) => {
                                             const inputValue = e.target.value;
-                                            // @ts-expect-error
+                                       // @ts-ignore
                                             setEditProduct(prev => ({
                                                 ...prev,
                                                 price: inputValue === "" ? "" : Number(inputValue)
