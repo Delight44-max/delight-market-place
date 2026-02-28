@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { uploadToCloudinary } from "@/lib/cloudinary";
 import { toast } from "react-hot-toast";
+import { deleteMyAuthAccount } from "@/lib/selfProfileDeleteAction";
 
 interface Product {
     id: string;
@@ -180,10 +181,46 @@ export default function Dashboard() {
     };
 
     const handleDeleteProduct = async (id: string) => {
-        if (!confirm("Delete this product? This action cannot be undone.")) return;
+        const confirmProductDelete = () => new Promise<boolean>((resolve) => {
+            toast((t) => (
+                <div className="flex flex-col gap-3 w-80 p-4 bg-white rounded-xl border border-red-300 shadow-xl">
+                    <p className="text-lg font-bold text-red-700 text-center">Delete Product?</p>
+                    <p className="text-sm text-center">
+                        Are you sure you want to permanently delete this product?
+                    </p>
+                    <p className="text-xs text-gray-600 text-center">
+                        This action cannot be undone.
+                    </p>
+                    <div className="flex gap-3">
+                        <button
+                            onClick={() => { toast.dismiss(t.id); resolve(false); }}
+                            className="flex-1 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg text-sm font-medium"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={() => { toast.dismiss(t.id); resolve(true); }}
+                            className="flex-1 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-bold"
+                        >
+                            Yes, Delete
+                        </button>
+                    </div>
+                </div>
+            ), { duration: Infinity, position: "top-center" });
+        });
+
+        const shouldDelete = await confirmProductDelete();
+        if (!shouldDelete) return;
+
+        toast.loading("Deleting product...");
+
         const { error } = await supabase.from("products").delete().eq("id", id);
-        if (error) toast.error("Delete failed");
-        else {
+
+        toast.dismiss();
+
+        if (error) {
+            toast.error("Delete failed");
+        } else {
             toast.success("Product removed");
             fetchProducts(user.id);
         }
@@ -215,6 +252,83 @@ export default function Dashboard() {
         window.open(`https://wa.me/${ADMIN_WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`, "_blank");
         setShowPlanModal(false);
         toast.success("Opening WhatsApp... Please complete payment with admin.");
+    };
+
+    // ────────────────────────────────────────────────
+    // Delete My Account (seller profile + auth user)
+    // ────────────────────────────────────────────────
+    const handleDeleteAccount = async () => {
+        const confirmDelete = () => new Promise<boolean>((resolve) => {
+            toast((t) => (
+                <div className="flex flex-col gap-4 w-96 p-6 bg-white rounded-2xl border-2 border-red-500 shadow-2xl">
+                    <p className="text-xl font-bold text-red-700 text-center">
+                        ⚠️ DELETE MY ACCOUNT FOREVER
+                    </p>
+                    <p className="text-base text-center font-semibold text-gray-800">
+                        This will permanently delete:
+                    </p>
+                    <ul className="text-sm text-gray-700 list-disc pl-6 space-y-1">
+                        <li>Your seller profile</li>
+                        <li>All your listed products</li>
+                        <li>Your login account (you won't be able to log in again)</li>
+                    </ul>
+                    <p className="text-xs text-red-600 font-medium text-center">
+                        This action is IRREVERSIBLE — no recovery possible!
+                    </p>
+                    <div className="flex gap-4 mt-4">
+                        <button
+                            onClick={() => { toast.dismiss(t.id); resolve(false); }}
+                            className="flex-1 py-3 bg-gray-200 hover:bg-gray-300 rounded-xl text-sm font-semibold"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={() => { toast.dismiss(t.id); resolve(true); }}
+                            className="flex-1 py-3 bg-red-600 hover:bg-red-800 text-white rounded-xl text-sm font-bold"
+                        >
+                            Yes, Delete Everything
+                        </button>
+                    </div>
+                </div>
+            ), {
+                duration: Infinity,
+                position: "top-center",
+                style: { maxWidth: '450px' }
+            });
+        });
+
+        const shouldDelete = await confirmDelete();
+        if (!shouldDelete) return;
+
+        toast.loading("Deleting your account permanently... This may take a moment");
+
+        try {
+            // Step 1: Delete seller profile
+            const { error: sellerError } = await supabase
+                .from("sellers")
+                .delete()
+                .eq("id", user.id);
+
+            if (sellerError) throw sellerError;
+
+            // Step 2: Delete auth user using Server Action
+            const authResult = await deleteMyAuthAccount();
+
+            if (!authResult.success) {
+                throw new Error(authResult.error || "Failed to delete auth account");
+            }
+
+            toast.dismiss();
+            toast.success("Your account has been permanently deleted");
+
+
+            await supabase.auth.signOut();
+            router.replace("/login");
+        } catch (err: any) {
+            toast.dismiss();
+            toast.error(`Deletion failed: ${err.message}`);
+            console.error("Account delete error:", err);
+        }
     };
 
     const getStatusBadge = (status: string) => {
@@ -357,6 +471,17 @@ export default function Dashboard() {
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>
                                 Ship Products
                             </button>
+
+                            {/* Delete My Account Button */}
+                            <button
+                                onClick={handleDeleteAccount}
+                                className="flex items-center justify-center gap-2 bg-red-600 hover:bg-red-800 text-white px-6 py-3 rounded-xl font-bold hover:shadow-xl transition-all mt-2"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                                Delete My Account
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -483,8 +608,11 @@ export default function Dashboard() {
                                         <input
                                             type="number"
                                             value={form.price}
-                                            onChange={(e) => setForm({ ...form, price: e.target.value })}
-                                            className="w-full border-2 border-gray-200 rounded-xl p-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                                            onChange={(e) => setForm({
+                                                ...form,
+                                                price: e.target.value
+                                            })}
+                                            className="w-full border-2 border-gray-200 rounded-xl p-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
                                             placeholder="0.00"
                                             step="0.01"
                                             required
@@ -542,11 +670,11 @@ export default function Dashboard() {
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     {products.map((product) => (
                                         <div key={product.id} className="group bg-gradient-to-br from-gray-50 to-white rounded-2xl border-2 border-gray-200 overflow-hidden hover:border-blue-400 hover:shadow-lg transition-all">
-                                            <div className="relative h-48 bg-gray-100 overflow-hidden">
+                                            <div className="relative h-48 bg-white flex items-center justify-center overflow-hidden p-2">
                                                 <img
                                                     src={product.image_url}
                                                     alt={product.description}
-                                                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                                                    className="max-w-full max-h-full object-contain group-hover:scale-105 transition-transform duration-500"
                                                 />
                                                 {product.video_url && (
                                                     <div className="absolute top-3 right-3 bg-purple-600 text-white px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
@@ -653,8 +781,7 @@ export default function Dashboard() {
                                         ) : (
                                             <>
                                                 Activate
-                                                <svg className="w-5 h-5 fill-current text-green-500" viewBox="0 0 24 24"
-                                                     xmlns="http://www.w3.org/2000/svg">
+                                                <svg className="w-5 h-5 fill-current text-green-500" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                                     <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
                                                 </svg>
                                             </>
@@ -711,8 +838,11 @@ export default function Dashboard() {
                                     <input
                                         type="number"
                                         className="w-full border-2 border-gray-200 rounded-xl p-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                                        value={editProduct.price}
-                                        onChange={(e) => setEditProduct({...editProduct, price: parseFloat(e.target.value)})}
+                                        value={editProduct.price ?? ""}
+                                        onChange={(e) => setEditProduct({
+                                            ...editProduct,
+                                            price: e.target.value === "" ? "" : Number(e.target.value)
+                                        })}
                                         step="0.01"
                                     />
                                 </div>

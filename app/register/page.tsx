@@ -61,6 +61,23 @@ export default function RegisterSeller() {
             });
 
             if (authError) throw authError;
+            const { error: sellerError } = await supabase.from("sellers").insert({
+                id: authData.user?.id,
+                brand_name: formData.brandName,
+                ceo_name: formData.ceoName,
+                category: formData.category,
+                whatsapp: formData.whatsapp,
+                country: formData.country,
+                state: formData.state,
+                bio: formData.bio,
+                profile_pic_url: profilePicUrl,
+                status: "free",           // Default to Free plan
+                is_approved: true,        // Auto-approved → visible immediately
+                is_active: true,          // Visible by default
+                is_featured: false,
+                is_paid: false,
+                premium_expiry: null,
+            });
 
 
             setIsSubmitted(true);

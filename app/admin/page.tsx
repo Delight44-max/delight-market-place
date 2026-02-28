@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from '@supabase/supabase-js';
 import { toast } from "react-hot-toast";
+import { deleteSellerProfile } from "@/lib/deleteSellerAction";
 
 interface Seller {
     id: string;
@@ -15,7 +16,7 @@ interface Seller {
     whatsapp: string;
 }
 
-// Admin client with service role (bypasses RLS)
+// Admin client with anon key
 const getAdminClient = () => {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     const supabaseServiceKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -81,6 +82,75 @@ export default function Admin() {
             console.log("Update successful:", data);
             toast.success("Seller updated successfully");
             fetchSellers();
+        }
+    };
+
+    const handleDeleteSeller = async (seller: Seller) => {
+        // Toast-based confirmation (no native alert)
+        const confirmDelete = () => new Promise<boolean>((resolve) => {
+            toast((t) => (
+                <div className="flex flex-col gap-4 w-80 p-4 bg-white rounded-xl border border-red-300 shadow-xl">
+                    <p className="text-lg font-bold text-red-700 text-center">
+                        ⚠️ PERMANENT DELETE WARNING
+                    </p>
+                    <p className="text-sm text-center">
+                        Are you sure you want to <strong>permanently delete</strong> the seller profile of
+                        <br />
+                        <strong>"{seller.brand_name}"</strong>?
+                    </p>
+                    <p className="text-xs text-gray-600 text-center">
+                        This will remove their record from the sellers table.<br />
+                        This action <strong>CANNOT</strong> be undone!
+                    </p>
+                    <div className="flex gap-3">
+                        <button
+                            onClick={() => {
+                                toast.dismiss(t.id);
+                                resolve(false);
+                            }}
+                            className="flex-1 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg text-sm font-medium"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={() => {
+                                toast.dismiss(t.id);
+                                resolve(true);
+                            }}
+                            className="flex-1 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-bold"
+                        >
+                            Yes, Delete Permanently
+                        </button>
+                    </div>
+                </div>
+            ), {
+                duration: Infinity,
+                position: "top-center",
+                style: {
+                    maxWidth: '400px',
+                    background: 'white',
+                    borderRadius: '12px',
+                    padding: '16px'
+                }
+            });
+        });
+
+        const shouldDelete = await confirmDelete();
+
+        if (!shouldDelete) return;
+
+        toast.loading("Deleting seller profile...");
+
+        const result = await deleteSellerProfile(seller.id);
+
+        toast.dismiss();
+
+        if (result.success) {
+            toast.success(result.message);
+            fetchSellers(); // refresh list
+        } else {
+            toast.error(`Failed to delete: ${result.error}`);
+            console.error("Delete failed:", result.error);
         }
     };
 
@@ -275,6 +345,14 @@ export default function Admin() {
                                                 className="w-full py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg text-xs font-bold border border-red-100"
                                             >
                                                 Quick Deactivate
+                                            </button>
+
+                                            {/* DELETE PROFILE BUTTON */}
+                                            <button
+                                                onClick={() => handleDeleteSeller(s)}
+                                                className="w-full py-2 bg-red-600 hover:bg-red-800 text-white rounded-lg text-xs font-bold mt-2 shadow-md transition-colors"
+                                            >
+                                                🗑️ Delete Profile
                                             </button>
                                         </div>
                                     </td>
